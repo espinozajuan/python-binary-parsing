@@ -1,28 +1,30 @@
 import struct
 from typing import List, ByteString
 from typeguard import typechecked
+import pytinyxml2 as xml
 
 class FXP:
     @typechecked
     def __init__(self, version: int, fxId: int, fxVersion: int, numPrograms: int, 
-                 prgName: str, chunkSize: int, xmlContent: ByteString, wavetables: List[ByteString]):
-        assert len(prgName.encode('utf-8')) <= 28, f"Program name must be at most 28 bytes long, but is {len(prgName.encode('utf-8'))} bytes"
+                 prgName: str, byteSize: int, xmlContent: ByteString, wavetables: List[ByteString]):
+        assert len(prgName.encode('utf-8')) <= 28, "Program name must be at most 28 bytes long"
         
         self.version: int = version
         self.fxId: int = fxId
         self.fxVersion: int = fxVersion
         self.numPrograms: int = numPrograms
         self.prgName: str = prgName
-        self.chunkSize: int = chunkSize
+        self.byteSize: int = byteSize  # Updated to store the byteSize
         self.xmlContent: ByteString = xmlContent
         self.wavetables: List[ByteString] = wavetables
 
     @typechecked
     def save(self, filename: str) -> None:
+        # Using self.byteSize to ensure consistency
         fxp_header: ByteString = struct.pack(
             ">4si4siiii28si",
             b'CcnK',
-            0,  # Set byteSize to 0 as per previous conclusion
+            self.byteSize,
             b'FPCh',
             self.version,
             self.fxId,
@@ -32,7 +34,7 @@ class FXP:
             len(self.xmlContent)
         )
 
-        assert len(fxp_header) == 60, f"FXP header size must be 60 bytes, but is {len(fxp_header)} bytes"
+        assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
 
         wavetable_data: ByteString = b''.join(self.wavetables)
 
@@ -46,7 +48,7 @@ class FXP:
     def load(filename: str) -> "FXP":
         with open(filename, 'rb') as f:
             fxp_header: ByteString = f.read(60)
-            assert len(fxp_header) == 60, f"FXP header size must be 60 bytes, but is {len(fxp_header)} bytes"
+            assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
 
             chunkmagic, byteSize, fxMagic, version, fxId, fxVersion, numPrograms, prgName, chunkSize = struct.unpack(
                 ">4si4siiii28si", fxp_header)
@@ -54,10 +56,10 @@ class FXP:
             xml_content: ByteString = f.read(chunkSize)
             wavetables: ByteString = f.read()
 
-            assert len(prgName.strip(b'\x00')) <= 28, f"Program name must be at most 28 bytes long, but is {len(prgName.strip(b'\x00'))} bytes"
+            assert len(prgName.strip(b'\x00')) <= 28, "Program name must be at most 28 bytes long"
 
             return FXP(version, fxId, fxVersion, numPrograms, prgName.strip(b'\x00').decode('utf-8'), 
-                       chunkSize, xml_content, [wavetables])
+                       byteSize, xml_content, [wavetables])
 
 if __name__ == "__main__":
     fxp = FXP.load("C:/Users/Juan/Desktop/tuba.fxp")
