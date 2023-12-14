@@ -3,29 +3,50 @@ import pytinyxml2 as xml
 from typing import List, ByteString
 from typeguard import typechecked
 
-class FXP:
+class FXPBinaryData:
     @typechecked
-    def __init__(self, version: int, fxId: int, fxVersion: int, numPrograms: int, 
-                 prgName: str, chunkSize: int, fxp_header: ByteString, non_xml_data_before: ByteString, 
-                 xmlContent: ByteString, non_xml_data_after: ByteString, extracted_xml_data: dict, wavetables: List[ByteString]):
-        assert len(prgName.encode('utf-8')) <= 28, "Program name must be at most 28 bytes long"
-        
-        self.version: int = version
-        self.fxId: int = fxId
-        self.fxVersion: int = fxVersion
-        self.numPrograms: int = numPrograms
-        self.prgName: str = prgName
-        self.chunkSize: int = chunkSize
-        self.fxp_header: ByteString = fxp_header
-        self.non_xml_data_before: ByteString = non_xml_data_before
-        self.xmlContent: ByteString = xmlContent
-        self.non_xml_data_after: ByteString = non_xml_data_after
-        self.extracted_xml_data = extracted_xml_data
-        self.wavetables: List[ByteString] = wavetables
+    def __init__(self, fxp_header: ByteString, non_xml_data_before: ByteString, xml_content: ByteString, non_xml_data_after: ByteString, wavetables: List[ByteString]):
+        self.fxp_header = fxp_header
+        self.non_xml_data_before = non_xml_data_before
+        self.xml_content = xml_content
+        self.non_xml_data_after = non_xml_data_after
+        self.wavetables = wavetables
 
-    def extract_xml_data(self):
+    @staticmethod
+    @typechecked
+    def load(filename: str) -> "FXPBinaryData":
+        with open(filename, 'rb') as f:
+            fxp_header = f.read(60)
+            assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
+            content = f.read()
+            start = content.find(b"<?xml")
+            end = content.find(b"</patch>") + len(b"</patch>")
+            non_xml_data_before = content[:start] if start != -1 else b''
+            xml_content = content[start:end] if start != -1 and end != -1 else b''
+            non_xml_data_after = content[end:] if end != -1 else b''
+            wavetables = []  # Logic to extract wavetables
+            return FXPBinaryData(fxp_header, non_xml_data_before, xml_content, non_xml_data_after, wavetables)
+
+    @typechecked
+    def save(self, filename: str) -> None:
+        with open(filename, 'wb') as f:
+            f.write(self.fxp_header)
+            f.write(self.non_xml_data_before)
+            f.write(self.xml_content)
+            f.write(self.non_xml_data_after)
+            for wt in self.wavetables:
+                f.write(wt)
+
+class FXPHumanReadable:
+    @typechecked
+    def __init__(self, binary_data: FXPBinaryData):
+        self.binary_data = binary_data
+        self.extracted_xml_data = self.extract_xml_data()
+
+    @typechecked
+    def extract_xml_data(self) -> dict:
         xml_doc = xml.XMLDocument()
-        xml_doc.Parse(self.xmlContent.decode(errors='ignore'))
+        xml_doc.Parse(self.binary_data.xml_content.decode())
         extracted_data = {}
 
         # Extracting meta information
@@ -53,53 +74,27 @@ class FXP:
 
         return extracted_data
 
-    @staticmethod
-    @typechecked
-    def load(filename: str) -> "FXP":
-        with open(filename, 'rb') as f:
-            fxp_header: ByteString = f.read(60)
-            assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
-            content = f.read()
-            start = content.find(b"<?xml")
-            end = content.find(b"</patch>") + len(b"</patch>")
-            non_xml_data_before = content[:start] if start != -1 else b''
-            xml_content = content[start:end] if start != -1 and end != -1 else b''
-            non_xml_data_after = content[end:] if end != -1 else b''
-
-            # Extract XML data
-            fxp_instance = FXP(0, 0, 0, 0, '', 0, fxp_header, non_xml_data_before, xml_content, non_xml_data_after, {}, [])
-            extracted_xml_data = fxp_instance.extract_xml_data()
-
-            return FXP(0, 0, 0, 0, '', 0, fxp_header, non_xml_data_before, xml_content, non_xml_data_after, extracted_xml_data, [])
-
-    @typechecked
-    def save(self, filename: str) -> None:
-        with open(filename, 'wb') as f:
-            f.write(self.fxp_header)
-            f.write(self.non_xml_data_before)
-            f.write(self.xmlContent)
-            f.write(self.non_xml_data_after)
-            for wt in self.wavetables:
-                f.write(wt)
-
 if __name__ == "__main__":
-    # Load the original FXP file
-    original_fxp = FXP.load(r"C:\Users\Juan\Desktop\Boom.fxp")
+    # Load the original FXP file as binary data
+    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Bork.fxp")
 
-    # Save the loaded FXP to a new file
-    original_fxp.save(r"C:\Users\Juan\Desktop\new_Boom.fxp")
+    # Convert binary data to human-readable format
+    human_readable = FXPHumanReadable(binary_data)
 
-    # Assert that the contents of the original and new files are identical
-    original_fxp_data = open(r"C:\Users\Juan\Desktop\Boom.fxp", "rb").read()
-    new_fxp_data = open(r"C:\Users\Juan\Desktop\new_Boom.fxp", "rb").read()
-    assert original_fxp_data == new_fxp_data, "The original and new FXP files are not identical"
-
-    # Write the extracted data to a new file
+    # Save the human-readable data to a new file
     with open(r"C:\Users\Juan\Desktop\extracted_data.txt", "w") as file:
-        for key, value in original_fxp.extracted_xml_data.items():
+        for key, value in human_readable.extracted_xml_data.items():
             if isinstance(value, dict):
                 file.write(f"{key}:\n")
                 for subkey, subvalue in value.items():
                     file.write(f"    {subkey}: {subvalue}\n")
             else:
                 file.write(f"{key}: {value}\n")
+
+    # Save back to binary format (if needed)
+    binary_data.save(r"C:\Users\Juan\Desktop\new_Bork.fxp")
+
+    # Verification (Optional)
+    original_data = open(r"C:\Users\Juan\Desktop\Bork.fxp", "rb").read()
+    new_data = open(r"C:\Users\Juan\Desktop\new_Bork.fxp", "rb").read()
+    assert original_data == new_data, "The original and new FXP files are not identical"
