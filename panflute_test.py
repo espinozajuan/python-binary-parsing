@@ -5,6 +5,7 @@ from typeguard import typechecked
 from tqdm import tqdm
 import glob
 import os
+import tempfile
 
 @typechecked
 class FXPBinaryData:
@@ -31,14 +32,30 @@ class FXPBinaryData:
             wavetables = []  
             return FXPBinaryData(fxp_header, non_xml_data_before, xml_content, non_xml_data_after, wavetables)
 
-    def save(self, filename: str) -> None:
-        with open(filename, 'wb') as f:
-            f.write(self.fxp_header)
-            f.write(self.non_xml_data_before)
-            f.write(self.xml_content)
-            f.write(self.non_xml_data_after)
-            for wt in self.wavetables:
-                f.write(wt)
+    def save(self, file) -> None:
+        """
+        Save the FXP data to a file.
+
+        :param file: A file path (str) or a file-like object.
+        """
+        if isinstance(file, str):
+            with open(file, 'wb') as f:
+                self._write_to_file(f)
+        else:
+            self._write_to_file(file)
+
+    def _write_to_file(self, f):
+        """
+        Write the FXP data to a given file-like object.
+
+        :param f: A file-like object.
+        """
+        f.write(self.fxp_header)
+        f.write(self.non_xml_data_before)
+        f.write(self.xml_content)
+        f.write(self.non_xml_data_after)
+        for wt in self.wavetables:
+            f.write(wt)
 
 class FXPHumanReadable:
     @typechecked
@@ -73,13 +90,14 @@ class FXPHumanReadable:
             extracted_data["parameters"][name] = {"type": param_type, "value": param_value}
             param = param.NextSiblingElement()
 
-        # Add extraction logic for other elements as needed
-
         return extracted_data
 
 if __name__ == "__main__":
- # Load the original FXP file as binary data
-    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Gumdrops.fxp")
+    # Load and process a single FXP file for demonstration
+    single_fxp_path = r"C:\Users\Juan\Desktop\Boom.fxp"
+
+    # Load the original FXP file as binary data
+    binary_data = FXPBinaryData.load(single_fxp_path)
 
     # Convert binary data to human-readable format
     human_readable = FXPHumanReadable(binary_data)
@@ -94,28 +112,32 @@ if __name__ == "__main__":
             else:
                 file.write(f"{key}: {value}\n")
 
-    # Save back to binary format (if needed)
-    binary_data.save(r"C:\Users\Juan\Desktop\new_Gumdrops.fxp")
+    # Save back to binary format using a temporary file for comparison
+    with tempfile.TemporaryFile() as tmp_file:
+        binary_data.save(tmp_file)
+        tmp_file.seek(0)  # Rewind to the beginning of the tempfile
+        saved_data = tmp_file.read()
 
-    # Default path for surge_path can be set to your specific default directory
-    surge_path = r"C:\ProgramData\Surge XT"  # Replace with your default directory
+    # Load the original data for in-memory comparison
+    with open(single_fxp_path, 'rb') as original_file:
+        original_data = original_file.read()
 
-    # Using glob to find all .fxp files in the specified directory and its subdirectories
+    # Verify the original and saved data are identical
+    assert original_data == saved_data, "The original and new FXP files are not identical"
+
+    # Set default directory path for batch processing of FXP files
+    surge_path = r"C:\ProgramData\Surge XT"
+
+    # Find all .fxp files in the specified directory and its subdirectories
     fxp_files = glob.glob(os.path.join(surge_path, "**/*.fxp"), recursive=True)
 
-    # Processing each file with a progress bar
+    # Process each FXP file with a progress bar
     for fxp_file in tqdm(fxp_files):
         try:
             binary_data = FXPBinaryData.load(fxp_file)
-            # You can add further processing of binary_data here if needed
+            # Additional processing of binary_data (if required)
 
-            # For demonstration
+            # For demonstration, print the filename
             print(f"Processed {fxp_file}")
         except Exception as e:
             print(f"Error processing {fxp_file}: {e}")
-
-
-    # Verification (Optional)
-    original_data = open(r"C:\Users\Juan\Desktop\Gumdrops.fxp", "rb").read()
-    new_data = open(r"C:\Users\Juan\Desktop\new_Gumdrops.fxp", "rb").read()
-    assert original_data == new_data, "The original and new FXP files are not identical"
