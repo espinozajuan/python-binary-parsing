@@ -3,8 +3,8 @@ import pytinyxml2 as xml
 from typing import List, ByteString
 from typeguard import typechecked
 
+@typechecked
 class FXPBinaryData:
-    @typechecked
     def __init__(self, fxp_header: ByteString, non_xml_data_before: ByteString, xml_content: ByteString, non_xml_data_after: ByteString, wavetables: List[ByteString]):
         self.fxp_header = fxp_header
         self.non_xml_data_before = non_xml_data_before
@@ -13,7 +13,6 @@ class FXPBinaryData:
         self.wavetables = wavetables
 
     @staticmethod
-    @typechecked
     def load(filename: str) -> "FXPBinaryData":
         with open(filename, 'rb') as f:
             fxp_header = f.read(60)
@@ -24,10 +23,11 @@ class FXPBinaryData:
             non_xml_data_before = content[:start] if start != -1 else b''
             xml_content = content[start:end] if start != -1 and end != -1 else b''
             non_xml_data_after = content[end:] if end != -1 else b''
-            wavetables = []  # Logic to extract wavetables
+            
+            # Logic to extract wavetables (if applicable)
+            wavetables = []  
             return FXPBinaryData(fxp_header, non_xml_data_before, xml_content, non_xml_data_after, wavetables)
 
-    @typechecked
     def save(self, filename: str) -> None:
         with open(filename, 'wb') as f:
             f.write(self.fxp_header)
@@ -76,7 +76,7 @@ class FXPHumanReadable:
 
 if __name__ == "__main__":
     # Load the original FXP file as binary data
-    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Bork.fxp")
+    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Dirt.fxp")
 
     # Convert binary data to human-readable format
     human_readable = FXPHumanReadable(binary_data)
@@ -92,9 +92,9 @@ if __name__ == "__main__":
                 file.write(f"{key}: {value}\n")
 
     # Save back to binary format (if needed)
-    binary_data.save(r"C:\Users\Juan\Desktop\new_Bork.fxp")
+    binary_data.save(r"C:\Users\Juan\Desktop\new_Dirt.fxp")
 
     # Verification (Optional)
-    original_data = open(r"C:\Users\Juan\Desktop\Bork.fxp", "rb").read()
-    new_data = open(r"C:\Users\Juan\Desktop\new_Bork.fxp", "rb").read()
+    original_data = open(r"C:\Users\Juan\Desktop\Dirt.fxp", "rb").read()
+    new_data = open(r"C:\Users\Juan\Desktop\new_Dirt.fxp", "rb").read()
     assert original_data == new_data, "The original and new FXP files are not identical"
