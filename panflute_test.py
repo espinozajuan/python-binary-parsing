@@ -2,6 +2,9 @@ import struct
 import pytinyxml2 as xml
 from typing import List, ByteString
 from typeguard import typechecked
+from tqdm import tqdm
+import glob
+import os
 
 @typechecked
 class FXPBinaryData:
@@ -75,8 +78,8 @@ class FXPHumanReadable:
         return extracted_data
 
 if __name__ == "__main__":
-    # Load the original FXP file as binary data
-    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Dirt.fxp")
+ # Load the original FXP file as binary data
+    binary_data = FXPBinaryData.load(r"C:\Users\Juan\Desktop\Gumdrops.fxp")
 
     # Convert binary data to human-readable format
     human_readable = FXPHumanReadable(binary_data)
@@ -92,9 +95,27 @@ if __name__ == "__main__":
                 file.write(f"{key}: {value}\n")
 
     # Save back to binary format (if needed)
-    binary_data.save(r"C:\Users\Juan\Desktop\new_Dirt.fxp")
+    binary_data.save(r"C:\Users\Juan\Desktop\new_Gumdrops.fxp")
+
+    # Default path for surge_path can be set to your specific default directory
+    surge_path = r"C:\ProgramData\Surge XT"  # Replace with your default directory
+
+    # Using glob to find all .fxp files in the specified directory and its subdirectories
+    fxp_files = glob.glob(os.path.join(surge_path, "**/*.fxp"), recursive=True)
+
+    # Processing each file with a progress bar
+    for fxp_file in tqdm(fxp_files):
+        try:
+            binary_data = FXPBinaryData.load(fxp_file)
+            # You can add further processing of binary_data here if needed
+
+            # For demonstration
+            print(f"Processed {fxp_file}")
+        except Exception as e:
+            print(f"Error processing {fxp_file}: {e}")
+
 
     # Verification (Optional)
-    original_data = open(r"C:\Users\Juan\Desktop\Dirt.fxp", "rb").read()
-    new_data = open(r"C:\Users\Juan\Desktop\new_Dirt.fxp", "rb").read()
+    original_data = open(r"C:\Users\Juan\Desktop\Gumdrops.fxp", "rb").read()
+    new_data = open(r"C:\Users\Juan\Desktop\new_Gumdrops.fxp", "rb").read()
     assert original_data == new_data, "The original and new FXP files are not identical"
