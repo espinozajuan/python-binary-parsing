@@ -17,10 +17,36 @@ class FXPBinaryData:
         self.wavetables = wavetables
 
     @staticmethod
+    def parse_header(fxp_header: ByteString) -> dict:
+        """
+        Parse the FXP file header into a human-readable format.
+
+        :param fxp_header: The binary content of the FXP header.
+        :return: A dictionary with the parsed header values.
+        """
+        header_format = ">4s i 4s i i i i 28s i"
+        fields = struct.unpack(header_format, fxp_header)
+
+        header = {
+            "File Signature": fields[0].decode(),
+            "Version": fields[1],
+            "Type": fields[2].decode(),
+            "Sub-Version": fields[3],
+            "Timestamp": fields[4],
+            "Number of Records": fields[5],
+            "Record Size": fields[6],
+            "Payload": fields[7].decode().rstrip('\x00'),
+            "Checksum": fields[8]
+        }
+        return header
+
+    @staticmethod
     def load(filename: str) -> "FXPBinaryData":
         with open(filename, 'rb') as f:
             fxp_header = f.read(60)
             assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
+            parsed_header = FXPBinaryData.parse_header(fxp_header)
+            print("Parsed Header:", parsed_header)  # For demonstration, print the parsed header
             content = f.read()
             start = content.find(b"<?xml")
             end = content.find(b"</patch>") + len(b"</patch>")
