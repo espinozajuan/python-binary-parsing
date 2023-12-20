@@ -91,6 +91,17 @@ class FXPHumanReadable:
             param = param.NextSiblingElement()
 
         return extracted_data
+    
+def check_parsing(fxp_file: str):
+    """Function to check the parsing of a single FXP file."""
+    try:
+        binary_data = FXPBinaryData.load(fxp_file)
+        # Additional processing of binary_data (if required)
+
+        # For demonstration, print the filename
+        print(f"Processed {fxp_file}")
+    except Exception as e:
+        print(f"Error processing {fxp_file}: {e}")
 
 if __name__ == "__main__":
     # Load and process a single FXP file for demonstration
@@ -133,11 +144,4 @@ if __name__ == "__main__":
 
     # Process each FXP file with a progress bar
     for fxp_file in tqdm(fxp_files):
-        try:
-            binary_data = FXPBinaryData.load(fxp_file)
-            # Additional processing of binary_data (if required)
-
-            # For demonstration, print the filename
-            print(f"Processed {fxp_file}")
-        except Exception as e:
-            print(f"Error processing {fxp_file}: {e}")
+        check_parsing(fxp_file)
