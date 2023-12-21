@@ -32,6 +32,12 @@ cd python-binary-parsing
 # Ensure Python 3 and pytinyxml2 are installed
 ```
 
+## Usage
+
+```bash
+python script_name.py your_surge_path_here
+```
+
 ## Documentation
 
 Detailed documentation is provided in the code, explaining the parsing process for both XML and non-XML binary data. This includes insights into how this data is structured and utilized within the Surge synthesizer, based on an analysis of the Surge CPP code and other relevant tools.

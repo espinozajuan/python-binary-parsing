@@ -6,7 +6,7 @@ from tqdm import tqdm
 import glob
 import os
 import tempfile
-
+import argparse
 @typechecked
 class FXPBinaryData:
     def __init__(self, fxp_header: ByteString, non_xml_data_before: ByteString, xml_content: ByteString, non_xml_data_after: ByteString, wavetables: List[ByteString]):
@@ -121,8 +121,34 @@ class FXPHumanReadable:
 def check_parsing(fxp_file: str):
     """Function to check the parsing of a single FXP file."""
     try:
+        # Load the original FXP file as binary data
         binary_data = FXPBinaryData.load(fxp_file)
-        # Additional processing of binary_data (if required)
+
+        # Convert binary data to human-readable format
+        human_readable = FXPHumanReadable(binary_data)
+
+        # Save the human-readable data to a new file
+        with open(os.path.splitext(fxp_file)[0] + "_extracted_data.txt", "w") as file:
+            for key, value in human_readable.extracted_xml_data.items():
+                if isinstance(value, dict):
+                    file.write(f"{key}:\n")
+                    for subkey, subvalue in value.items():
+                        file.write(f"    {subkey}: {subvalue}\n")
+                else:
+                    file.write(f"{key}: {value}\n")
+
+        # Save back to binary format using a temporary file for comparison
+        with tempfile.TemporaryFile() as tmp_file:
+            binary_data.save(tmp_file)
+            tmp_file.seek(0)  # Rewind to the beginning of the tempfile
+            saved_data = tmp_file.read()
+
+        # Load the original data for in-memory comparison
+        with open(fxp_file, 'rb') as original_file:
+            original_data = original_file.read()
+
+        # Verify the original and saved data are identical
+        assert original_data == saved_data, "The original and new FXP files are not identical"
 
         # For demonstration, print the filename
         print(f"Processed {fxp_file}")
@@ -130,43 +156,12 @@ def check_parsing(fxp_file: str):
         print(f"Error processing {fxp_file}: {e}")
 
 if __name__ == "__main__":
-    # Load and process a single FXP file for demonstration
-    single_fxp_path = r"C:\Users\Juan\Desktop\Boom.fxp"
-
-    # Load the original FXP file as binary data
-    binary_data = FXPBinaryData.load(single_fxp_path)
-
-    # Convert binary data to human-readable format
-    human_readable = FXPHumanReadable(binary_data)
-
-    # Save the human-readable data to a new file
-    with open(r"C:\Users\Juan\Desktop\extracted_data.txt", "w") as file:
-        for key, value in human_readable.extracted_xml_data.items():
-            if isinstance(value, dict):
-                file.write(f"{key}:\n")
-                for subkey, subvalue in value.items():
-                    file.write(f"    {subkey}: {subvalue}\n")
-            else:
-                file.write(f"{key}: {value}\n")
-
-    # Save back to binary format using a temporary file for comparison
-    with tempfile.TemporaryFile() as tmp_file:
-        binary_data.save(tmp_file)
-        tmp_file.seek(0)  # Rewind to the beginning of the tempfile
-        saved_data = tmp_file.read()
-
-    # Load the original data for in-memory comparison
-    with open(single_fxp_path, 'rb') as original_file:
-        original_data = original_file.read()
-
-    # Verify the original and saved data are identical
-    assert original_data == saved_data, "The original and new FXP files are not identical"
-
-    # Set default directory path for batch processing of FXP files
-    surge_path = r"C:\ProgramData\Surge XT"
+    parser = argparse.ArgumentParser(description='Process .fxp files.')
+    parser.add_argument('surge_path', type=str, help='Path to the directory containing .fxp files')
+    args = parser.parse_args()
 
     # Find all .fxp files in the specified directory and its subdirectories
-    fxp_files = glob.glob(os.path.join(surge_path, "**/*.fxp"), recursive=True)
+    fxp_files = glob.glob(os.path.join(args.surge_path, "**/*.fxp"), recursive=True)
 
     # Process each FXP file with a progress bar
     for fxp_file in tqdm(fxp_files):
