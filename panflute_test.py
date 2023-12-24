@@ -1,15 +1,25 @@
-import struct
-import pytinyxml2 as xml
-from typing import List, ByteString
-from typeguard import typechecked
-from tqdm import tqdm
+import argparse
 import glob
 import os
+import struct
 import tempfile
-import argparse
+from typing import ByteString, List
+
+import pytinyxml2 as xml
+from tqdm import tqdm
+from typeguard import typechecked
+
+
 @typechecked
 class FXPBinaryData:
-    def __init__(self, fxp_header: ByteString, non_xml_data_before: ByteString, xml_content: ByteString, non_xml_data_after: ByteString, wavetables: List[ByteString]):
+    def __init__(
+        self,
+        fxp_header: ByteString,
+        non_xml_data_before: ByteString,
+        xml_content: ByteString,
+        non_xml_data_after: ByteString,
+        wavetables: List[ByteString],
+    ):
         self.fxp_header = fxp_header
         self.non_xml_data_before = non_xml_data_before
         self.xml_content = xml_content
@@ -35,28 +45,36 @@ class FXPBinaryData:
             "Timestamp": fields[4],
             "Number of Records": fields[5],
             "Record Size": fields[6],
-            "Payload": fields[7].decode().rstrip('\x00'),
-            "Checksum": fields[8]
+            "Payload": fields[7].decode().rstrip("\x00"),
+            "Checksum": fields[8],
         }
         return header
 
     @staticmethod
     def load(filename: str) -> "FXPBinaryData":
-        with open(filename, 'rb') as f:
+        with open(filename, "rb") as f:
             fxp_header = f.read(60)
             assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
             parsed_header = FXPBinaryData.parse_header(fxp_header)
-            print("Parsed Header:", parsed_header)  # For demonstration, print the parsed header
+            print(
+                "Parsed Header:", parsed_header
+            )  # For demonstration, print the parsed header
             content = f.read()
             start = content.find(b"<?xml")
             end = content.find(b"</patch>") + len(b"</patch>")
-            non_xml_data_before = content[:start] if start != -1 else b''
-            xml_content = content[start:end] if start != -1 and end != -1 else b''
-            non_xml_data_after = content[end:] if end != -1 else b''
-            
+            non_xml_data_before = content[:start] if start != -1 else b""
+            xml_content = content[start:end] if start != -1 and end != -1 else b""
+            non_xml_data_after = content[end:] if end != -1 else b""
+
             # Logic to extract wavetables (if applicable)
-            wavetables = []  
-            return FXPBinaryData(fxp_header, non_xml_data_before, xml_content, non_xml_data_after, wavetables)
+            wavetables = []
+            return FXPBinaryData(
+                fxp_header,
+                non_xml_data_before,
+                xml_content,
+                non_xml_data_after,
+                wavetables,
+            )
 
     def save(self, file) -> None:
         """
@@ -65,7 +83,7 @@ class FXPBinaryData:
         :param file: A file path (str) or a file-like object.
         """
         if isinstance(file, str):
-            with open(file, 'wb') as f:
+            with open(file, "wb") as f:
                 self._write_to_file(f)
         else:
             self._write_to_file(file)
@@ -82,6 +100,7 @@ class FXPBinaryData:
         f.write(self.non_xml_data_after)
         for wt in self.wavetables:
             f.write(wt)
+
 
 class FXPHumanReadable:
     @typechecked
@@ -102,7 +121,7 @@ class FXPHumanReadable:
                 "name": meta.Attribute("name"),
                 "category": meta.Attribute("category"),
                 "comment": meta.Attribute("comment"),
-                "author": meta.Attribute("author")
+                "author": meta.Attribute("author"),
             }
 
         # Extracting parameters
@@ -113,11 +132,15 @@ class FXPHumanReadable:
             name = param.Value()
             param_type = param.Attribute("type")
             param_value = param.Attribute("value")
-            extracted_data["parameters"][name] = {"type": param_type, "value": param_value}
+            extracted_data["parameters"][name] = {
+                "type": param_type,
+                "value": param_value,
+            }
             param = param.NextSiblingElement()
 
         return extracted_data
-    
+
+
 def check_parsing(fxp_file: str):
     """Function to check the parsing of a single FXP file."""
     try:
@@ -144,20 +167,25 @@ def check_parsing(fxp_file: str):
             saved_data = tmp_file.read()
 
         # Load the original data for in-memory comparison
-        with open(fxp_file, 'rb') as original_file:
+        with open(fxp_file, "rb") as original_file:
             original_data = original_file.read()
 
         # Verify the original and saved data are identical
-        assert original_data == saved_data, "The original and new FXP files are not identical"
+        assert (
+            original_data == saved_data
+        ), "The original and new FXP files are not identical"
 
         # For demonstration, print the filename
         print(f"Processed {fxp_file}")
     except Exception as e:
         print(f"Error processing {fxp_file}: {e}")
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Process .fxp files.')
-    parser.add_argument('surge_path', type=str, help='Path to the directory containing .fxp files')
+    parser = argparse.ArgumentParser(description="Process .fxp files.")
+    parser.add_argument(
+        "surge_path", type=str, help="Path to the directory containing .fxp files"
+    )
     args = parser.parse_args()
 
     # Find all .fxp files in the specified directory and its subdirectories
