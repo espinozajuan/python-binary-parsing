@@ -9,17 +9,21 @@ import pytinyxml2 as xml
 from tqdm import tqdm
 from typeguard import typechecked
 
-
 @typechecked
 class FXPBinaryData:
     def __init__(
         self,
+        prgName: str,
+        chunkSize: int,
         fxp_header: ByteString,
         non_xml_data_before: ByteString,
         xml_content: ByteString,
         non_xml_data_after: ByteString,
         wavetables: List[ByteString],
     ):
+        assert len(prgName.encode('utf-8')) <= 28, "Program name must be at most 28 bytes long"
+        self.prgName = prgName
+        self.chunkSize = chunkSize
         self.fxp_header = fxp_header
         self.non_xml_data_before = non_xml_data_before
         self.xml_content = xml_content
@@ -33,7 +37,7 @@ class FXPBinaryData:
 
         :param fxp_header: The binary content of the FXP header.
         :return: A dictionary with the parsed header values.
-        """
+        """        
         header_format = ">4s i 4s i i i i 28s i"
         fields = struct.unpack(header_format, fxp_header)
 
@@ -56,9 +60,7 @@ class FXPBinaryData:
             fxp_header = f.read(60)
             assert len(fxp_header) == 60, "FXP header size must be 60 bytes"
             parsed_header = FXPBinaryData.parse_header(fxp_header)
-            print(
-                "Parsed Header:", parsed_header
-            )  # For demonstration, print the parsed header
+            print("Parsed Header:", parsed_header) # For demonstration, print the parsed header
             content = f.read()
             start = content.find(b"<?xml")
             end = content.find(b"</patch>") + len(b"</patch>")
@@ -69,11 +71,13 @@ class FXPBinaryData:
             # Logic to extract wavetables (if applicable)
             wavetables = []
             return FXPBinaryData(
-                fxp_header,
-                non_xml_data_before,
-                xml_content,
-                non_xml_data_after,
-                wavetables,
+                prgName='',
+                chunkSize=0,
+                fxp_header=fxp_header,
+                non_xml_data_before=non_xml_data_before,
+                xml_content=xml_content,
+                non_xml_data_after=non_xml_data_after,
+                wavetables=wavetables,
             )
 
     def save(self, file) -> None:
@@ -81,7 +85,7 @@ class FXPBinaryData:
         Save the FXP data to a file.
 
         :param file: A file path (str) or a file-like object.
-        """
+        """        
         if isinstance(file, str):
             with open(file, "wb") as f:
                 self._write_to_file(f)
@@ -101,15 +105,12 @@ class FXPBinaryData:
         for wt in self.wavetables:
             f.write(wt)
 
-
 class FXPHumanReadable:
-    @typechecked
-    def __init__(self, binary_data: FXPBinaryData):
-        self.binary_data = binary_data
-        self.extracted_xml_data = self.extract_xml_data()
+    def __init__(self, extracted_xml_data: dict, wavetables: List[ByteString]):
+        self.extracted_xml_data = extracted_xml_data
+        self.wavetables = wavetables
 
-    @typechecked
-    def extract_xml_data(self) -> dict:
+    def extract_xml_data(self):
         xml_doc = xml.XMLDocument()
         xml_doc.Parse(self.binary_data.xml_content.decode())
         extracted_data = {}
@@ -140,15 +141,17 @@ class FXPHumanReadable:
 
         return extracted_data
 
-
 def check_parsing(fxp_file: str):
-    """Function to check the parsing of a single FXP file."""
+    """
+    Function to check the parsing of a single FXP file.
+    """
     try:
         # Load the original FXP file as binary data
         binary_data = FXPBinaryData.load(fxp_file)
+        extracted_xml_data = binary_data.extract_xml_data()
 
         # Convert binary data to human-readable format
-        human_readable = FXPHumanReadable(binary_data)
+        human_readable = FXPHumanReadable(extracted_xml_data, binary_data.wavetables)
 
         # Save the human-readable data to a new file
         with open(os.path.splitext(fxp_file)[0] + "_extracted_data.txt", "w") as file:
@@ -163,29 +166,24 @@ def check_parsing(fxp_file: str):
         # Save back to binary format using a temporary file for comparison
         with tempfile.TemporaryFile() as tmp_file:
             binary_data.save(tmp_file)
-            tmp_file.seek(0)  # Rewind to the beginning of the tempfile
+            tmp_file.seek(0) # Rewind to the beginning of the tempfile
             saved_data = tmp_file.read()
 
         # Load the original data for in-memory comparison
         with open(fxp_file, "rb") as original_file:
             original_data = original_file.read()
 
-        # Verify the original and saved data are identical
-        assert (
-            original_data == saved_data
-        ), "The original and new FXP files are not identical"
+       # Verify the original and saved data are identical
+        assert original_data == saved_data, "The original and new FXP files are not identical"
 
         # For demonstration, print the filename
         print(f"Processed {fxp_file}")
     except Exception as e:
         print(f"Error processing {fxp_file}: {e}")
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process .fxp files.")
-    parser.add_argument(
-        "surge_path", type=str, help="Path to the directory containing .fxp files"
-    )
+    parser.add_argument("surge_path", type=str, help="Path to the directory containing .fxp files")
     args = parser.parse_args()
 
     # Find all .fxp files in the specified directory and its subdirectories
