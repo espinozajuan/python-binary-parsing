@@ -3,6 +3,8 @@ import glob
 import os
 import struct
 import tempfile
+import json
+import base64
 from typing import ByteString, List
 
 import pytinyxml2 as xml
@@ -70,13 +72,14 @@ class FXPBinaryData:
             f.write(wt)
 
 class FXPHumanReadable:
-    def __init__(self, binary_data: FXPBinaryData):
-        self.binary_data = binary_data
-        self.extracted_xml_data = self.extract_xml_data()
+    def __init__(self, extracted_xml_data, wavetables):
+        self.extracted_xml_data = extracted_xml_data
+        self.wavetables = wavetables
 
-    def extract_xml_data(self):
+    @classmethod
+    def from_xml(cls, xml_content: ByteString, wavetables: List[ByteString]):
         xml_doc = xml.XMLDocument()
-        xml_doc.Parse(self.binary_data.xml_content.decode())
+        xml_doc.Parse(xml_content.decode())
         extracted_data = {}
         meta = xml_doc.FirstChildElement("patch").FirstChildElement("meta")
         if meta is not None:
@@ -95,34 +98,56 @@ class FXPHumanReadable:
             param_value = param.Attribute("value")
             extracted_data["parameters"][name] = {"type": param_type, "value": param_value}
             param = param.NextSiblingElement()
-        return extracted_data
+        return cls(extracted_data, wavetables)
+
+    def to_json(self):
+        data = {
+            "extracted_xml_data": self.extracted_xml_data,
+            "wavetables": [base64.b64encode(wt).decode() for wt in self.wavetables]
+        }
+        return json.dumps(data, indent=4)
+
+    @classmethod
+    def from_json(cls, json_data):
+        data = json.loads(json_data)
+        extracted_xml_data = data["extracted_xml_data"]
+        wavetables = [base64.b64decode(wt) for wt in data["wavetables"]]
+        return cls(extracted_xml_data, wavetables)
 
 def check_parsing(fxp_file: str):
     try:
         binary_data = FXPBinaryData.load(fxp_file)
-        human_readable = FXPHumanReadable(binary_data)
-        # Save the human-readable data to a new file for demonstration
-        with open(os.path.splitext(fxp_file)[0] + "_extracted_data.txt", "w") as file:
-            for key, value in human_readable.extracted_xml_data.items():
-                if isinstance(value, dict):
-                    file.write(f"{key}:\n")
-                    for subkey, subvalue in value.items():
-                        file.write(f"    {subkey}: {subvalue}\n")
-                else:
-                    file.write(f"{key}: {value}\n")
-        # Save back to binary format using a temporary file for comparison
+
+        # Create FXPHumanReadable instance with extracted XML data and wavetables
+        human_readable = FXPHumanReadable.from_xml(binary_data.xml_content, binary_data.wavetables)
+
+        # Convert human-readable data to JSON and save it
+        json_data = human_readable.to_json()
+        with open(os.path.splitext(fxp_file)[0] + ".json", "w") as json_file:
+            json_file.write(json_data)
+
+        # Load human-readable data from JSON
+        with open(os.path.splitext(fxp_file)[0] + ".json", "r") as json_file:
+            loaded_json_data = json_file.read()
+        loaded_human_readable = FXPHumanReadable.from_json(loaded_json_data)
+
+        # Convert back to binary FXP format using a temporary file for comparison
         with tempfile.TemporaryFile() as tmp_file:
+            binary_data.wavetables = loaded_human_readable.wavetables  # Update wavetables
             binary_data.save(tmp_file)
-            tmp_file.seek(0) # Rewind to the beginning of the tempfile
+            tmp_file.seek(0)
             saved_data = tmp_file.read()
+
         # Load the original data for in-memory comparison
         with open(fxp_file, "rb") as original_file:
             original_data = original_file.read()
+
         # Verify the original and saved data are identical
         assert original_data == saved_data, "The original and new FXP files are not identical"
         print(f"Processed {fxp_file}")
     except Exception as e:
         print(f"Error processing {fxp_file}: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process .fxp files.")
